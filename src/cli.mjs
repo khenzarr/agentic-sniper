@@ -52,7 +52,7 @@ export async function main(args=process.argv.slice(2)){
     for(const x of radar.candidates){
       try{const standard=await deps.standard(x.address);const s=await sourceInfo(x.address);const plans=mintPlans(s.abi,wallet.wallet);
         const methods=[];for(const p of plans){try{const result=await deps.preparePlan(p,s,x.address,wallet.wallet);methods.push({method:p.signature,valueWei:result.valueWei,quantity:result.quantity,budget:result.budget,pricing:result.pricing});}catch(e){methods.push({method:p.signature,error:safeError(e)});}}
-        console.log(JSON.stringify({contract:x.address,standard,sourceName:s.name,methods}));
+        console.log(JSON.stringify({contract:x.address,standard,sourceName:s.name,sourceProvider:s.provider,sourcePrimaryReason:s.primaryReason,methods}));
       }catch(e){console.log(JSON.stringify({contract:x.address,error:safeError(e)}));}
     }return;
   }

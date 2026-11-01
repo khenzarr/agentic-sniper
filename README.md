@@ -9,7 +9,7 @@ It follows the current radar rather than a fixed collection. Each user connects 
 ## Features
 
 - Continuous discovery of ERC-20, ERC-721, and ERC-1155 candidates from the full radar.
-- Verified source and ABI checks, on-chain token interface checks, transaction simulation, and gas estimates.
+- Verified source and ABI checks through Etherscan with a keyless Sourcify fallback, on-chain token interface checks, transaction simulation, and gas estimates.
 - Support for selected zero-argument and recipient/quantity mint functions, including free and native-BNB paid methods.
 - Chainlink BNB/USD pricing and batch sizing within the $5 mint-plus-gas budget, with 10% price headroom.
 - Mandatory BAW previews with simulation, recipient, balance-change, approval, and risk checks.
@@ -120,7 +120,7 @@ To return to preview mode, set `SNIPER_MODE=preview` and restart. Configuration 
 
 1. Read ERC-20/ERC-721/ERC-1155 rows from the full radar, with free listings first. Commands displayed by the website are never executed.
 2. Verify bytecode and token interfaces on BSC.
-3. Require verified contract source and ABI from Etherscan. Upgradeable proxies are excluded.
+3. Require verified contract source and ABI from Etherscan, or an exact runtime match with source, ABI, matching BSC address, and explicit non-proxy resolution from Sourcify. Upgradeable proxies and unknown proxy status are excluded. A proxy or invalid ABI reported by Etherscan cannot be bypassed through the fallback.
 4. Consider `mint`, `publicMint`, `freeMint`, and `claim`.
 5. Accept supported zero-argument methods or clearly named recipient/quantity inputs. The recipient is the connected wallet and quantity is one. Token IDs, proofs, and signatures are not guessed.
 6. First simulate **value = 0 wei**. If this succeeds, select one free mint invocation. Otherwise, when paid minting is enabled, require a payable method and one unambiguous supported native unit-price getter. Plan the largest affordable quantity for that method and simulate the exact BNB payment. Remaining wallet limits, per-transaction limits and supply limits are enforced by those simulations.
@@ -206,10 +206,13 @@ Legacy records in the root `state/history.json` are preserved but not automatica
 
 Source API errors are distinguished from missing verification:
 
-- `API_KEY_INVALID`: Etherscan rejected the supplied key for that request.
+- `API_KEY_INVALID`: Etherscan rejected the supplied key for that request; this is separate from temporary IP throttling.
+- `API_IP_THROTTLED`: Etherscan reported too many invalid-key attempts from the source IP. The bot stops Etherscan requests for at least 35 seconds instead of hammering the endpoint.
 - `API_RATE_LIMIT`: The source API reported throttling.
 - `SOURCE_UNVERIFIED`: The response did not contain verified source and ABI.
-- Transient network/server errors receive bounded retries with backoff.
+- Etherscan requests are serialized and spaced at least 1.2 seconds apart within one runner. Rate-limit errors activate a shared cooldown; transient network/server errors receive bounded retries.
+- On unavailable or unverified primary results, Sourcify is queried without sending it your Etherscan key. Only exact verified matches with source and an explicit non-proxy result are accepted. A contract absent from both databases is skipped.
+- `sourceProvider` and `sourcePrimaryReason` in audit/preview output identify fallback usage. Sourcify coverage differs from Etherscan; it does not make unverified contracts eligible.
 
 ## Testing
 

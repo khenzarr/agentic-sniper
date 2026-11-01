@@ -65,7 +65,7 @@ export class Engine {
           const plan=viable[0],target={wallet:wallet.wallet,contract,inputData:plan.inputData,standard,valueWei:plan.valueWei,quantity:plan.quantity};
           const raw=await this.d.preview(target);
           const preview=validatePreview(raw,target,this.now(),this.c.previewTtlSeconds);
-          const item={id:randomUUID(),at:new Date(this.now()).toISOString(),day:todayTR(new Date(this.now())),wallet:wallet.wallet,agentId:wallet.agentId,contract,standard,method:plan.signature,inputData:plan.inputData,valueWei:plan.valueWei,quantity:plan.quantity,pricing:plan.pricing,sourceName:source.name,budget:plan.budget,requestId:preview.requestId,expiresAt:preview.expiresAt,requireAppConfirmation:preview.requireAppConfirmation,status:'PREVIEWED'};
+          const item={id:randomUUID(),at:new Date(this.now()).toISOString(),day:todayTR(new Date(this.now())),wallet:wallet.wallet,agentId:wallet.agentId,contract,standard,method:plan.signature,inputData:plan.inputData,valueWei:plan.valueWei,quantity:plan.quantity,pricing:plan.pricing,sourceName:source.name,sourceProvider:source.provider,sourcePrimaryReason:source.primaryReason,budget:plan.budget,requestId:preview.requestId,expiresAt:preview.expiresAt,requireAppConfirmation:preview.requireAppConfirmation,status:'PREVIEWED'};
           await this.store.write('preview-'+item.id,item);
           this.log('PREVIEW_READY',{...item,simulation:{parsedTx:preview.parsedTx,balanceChanges:preview.balanceChanges}});
           if(this.c.mode==='preview')continue; // scan every eligible collection, not just the first

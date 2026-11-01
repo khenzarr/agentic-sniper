@@ -32,8 +32,8 @@ test('source diagnostics distinguish bad key, rate limit and unverified',()=>{
 });
 test('transient source errors retry, invalid keys do not',async()=>{
  let calls=0;const fetcher=async()=>{calls++;return {ok:true,json:async()=>({status:'0',result:'Invalid API Key'})};};
- await assert.rejects(()=>sourceInfo(B,{fetcher,key:'test',wait:async()=>{}}),/API_KEY_INVALID/);assert.equal(calls,1);
- calls=0;await assert.rejects(()=>sourceInfo(B,{fetcher:async()=>{calls++;return {ok:false,status:429};},key:'test',wait:async()=>{}}),/API_TRANSIENT/);assert.equal(calls,3);
+ await assert.rejects(()=>sourceInfo(B,{fetcher,key:'test',wait:async()=>{},fallback:false}),/API_KEY_INVALID/);assert.equal(calls,1);
+ calls=0;await assert.rejects(()=>sourceInfo(B,{fetcher:async()=>{calls++;return {ok:false,status:503};},key:'test',wait:async()=>{},fallback:false}),/API_TRANSIENT/);assert.equal(calls,3);
 });
 test('payable zero-value mint and known recipient/quantity arguments supported',()=>{
  assert.equal(mintPlans(abi,A)[0].signature,'mint()');
