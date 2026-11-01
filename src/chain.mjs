@@ -39,7 +39,7 @@ export async function simulate(client, wallet, contract, inputData, config, valu
 }
 
 export async function verifyMintReceipt(client, { txHash, contract, standard, wallet, quantity='1' }) {
-  const { decodeEventLog, parseAbiItem, zeroAddress } = await import('viem');
+  const { decodeEventLog, parseAbiItem, zeroAddress,formatUnits } = await import('viem');
   const receipt=await client.getTransactionReceipt({ hash:txHash });
   if (receipt.status !== 'success') return { confirmed:false, failed:true, reason:'On-chain transaction reverted', gasUsed:receipt.gasUsed.toString(), effectiveGasPrice:receipt.effectiveGasPrice?.toString() ?? null };
   if (receipt.to?.toLowerCase() !== contract.toLowerCase()) throw new Error('Receipt recipient differs from expected mint contract');
@@ -61,5 +61,7 @@ export async function verifyMintReceipt(client, { txHash, contract, standard, wa
     } catch { /* Other unrelated events cannot prove NFT mint. */ }
   }
   const minted=standard==='ERC-20'?units>0n:units===BigInt(quantity);
-  return { confirmed:minted, failed:false, mintedUnits:units.toString(),reason:minted?'Verified mint Transfer event':'Missing or mismatched mint amount; manual inspection required', gasUsed:receipt.gasUsed.toString(), effectiveGasPrice:receipt.effectiveGasPrice?.toString() ?? null, actualGasWei:receipt.effectiveGasPrice ? (receipt.gasUsed*receipt.effectiveGasPrice).toString() : null };
+  let mintedAmount=standard==='ERC-20'?undefined:units.toString();
+  if(standard==='ERC-20'&&client.readContract){try{const decimals=await client.readContract({address:contract,abi:[parseAbiItem('function decimals() view returns (uint8)')],functionName:'decimals'});if(Number.isInteger(decimals)&&decimals>=0&&decimals<=36)mintedAmount=formatUnits(units,decimals);}catch{}}
+  return { confirmed:minted, failed:false, mintedUnits:units.toString(),mintedAmount,reason:minted?'Verified mint Transfer event':'Missing or mismatched mint amount; manual inspection required', gasUsed:receipt.gasUsed.toString(), effectiveGasPrice:receipt.effectiveGasPrice?.toString() ?? null, actualGasWei:receipt.effectiveGasPrice ? (receipt.gasUsed*receipt.effectiveGasPrice).toString() : null };
 }

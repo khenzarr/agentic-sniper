@@ -123,3 +123,35 @@ test('paid price change before submission creates no reservation or spend',async
  await f.engine.cycle();
  assert.equal(f.submits(),0);assert.deepEqual(await f.store.read('history',[]),[]);
 });
+test('max mode intentionally repeats fixed lots only after confirmation and tracks collection spend',async t=>{
+ const f=await fixture(t,'auto');f.c.maxMint=true;f.c.dailyLimit=null;f.c.maxMintCallsPerCollection=3;
+ const spent=[];f.deps.preparePlan=async(p,s,c,w,context)=>{spent.push(context.spentWei);return {...p,quantity:'1',valueWei:'0',budget:{upperEstimateWei:'100'}};};
+ f.deps.receipt=()=>({confirmed:true,actualGasWei:'100',mintedAmount:'10'});
+ for(let i=0;i<6;i++)await f.engine.cycle();
+ const h=await f.store.read('history',[]);
+ assert.equal(h.filter(r=>r.contract===B).length,3);assert.equal(h.filter(r=>r.contract===C).length,3);assert.equal(h[1].contract,C);assert.deepEqual(spent,['0','0','100','100','200','200']);
+});
+test('max mode chooses actual simulated token gain across supported methods',async t=>{
+ const f=await fixture(t,'auto');f.c.maxMint=true;
+ f.deps.source=()=>({abi:[...abi,{...abi[0],name:'freeMint'}]});
+ f.deps.standard=()=> 'ERC-20';f.deps.scan=()=>({totalTableRows:1,candidates:[{address:B,standardOnSite:'ERC-20'}]});
+ f.deps.preparePlan=async p=>({...p,quantity:'1',valueWei:'0',budget:{upperEstimateWei:'100'}});
+ f.deps.preview=target=>{const r=raw(target);r.data.simulationResult.balanceChanges=[{tokenType:'Erc20',contractAddress:B,owner:A,change:target.inputData==='0x1249c58b'?10:6}];return r;};
+ await f.engine.cycle();const r=(await f.store.read('history',[]))[0];assert.equal(r.method,'mint()');assert.equal(r.expectedGain,10);assert.equal(r.quantity,'1');
+});
+test('max mode still blocks uncertain submissions rather than retrying a fixed lot',async t=>{
+ const f=await fixture(t,'auto');f.c.maxMint=true;f.c.dailyLimit=null;
+ let calls=0;f.deps.execute=()=>{calls++;throw new Error('timeout');};
+ await f.engine.cycle();await f.engine.cycle();assert.equal(calls,1);
+});
+test('stop requested during preparation prevents starting any wallet execution',async t=>{
+ const f=await fixture(t,'auto');let stop=false;f.deps.shouldStop=()=>stop;
+ f.deps.preparePlan=async p=>{stop=true;return {...p,quantity:'1',valueWei:'0',budget:{upperEstimateWei:'100'}};};
+ await f.engine.cycle();assert.equal(f.submits(),0);assert.deepEqual(await f.store.read('history',[]),[]);
+});
+test('watcher lifetime lease blocks duplicate watchers but permits cycle locks',async t=>{
+ const f=await fixture(t);await f.store.lock(async()=>{
+  await assert.rejects(()=>f.store.lock(async()=>{},'watch'),/watch.lock/);
+  await f.store.lock(async()=>{});
+ },'watch');
+});

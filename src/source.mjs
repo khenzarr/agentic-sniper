@@ -72,7 +72,7 @@ export function createSourceProvider({fetcher=fetch,key=()=>process.env.ETHERSCA
 }
 const defaultProvider=createSourceProvider();
 export async function sourceInfo(address,options){return (options?createSourceProvider(options):defaultProvider)(address);}
-const names=new Set(['mint','publicMint','freeMint','claim']);
+const names=new Set(['mint','publicMint','freeMint','claim','safeMint']);
 export function mintPlans(abi,wallet) {
   if(!isAddress(wallet))throw new Error('Invalid mint wallet');
   const plans=[];

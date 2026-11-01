@@ -11,5 +11,8 @@
   "paidEnabled": true,
   "paidMintUsdLimit": 5,
   "usdSafetyMarginPercent": 10,
-  "maxBatchQuantity": 1000
+  "maxBatchQuantity": 1000,
+  "maxMint": true,
+  "degenMode": false,
+  "maxMintCallsPerCollection": 100
 }

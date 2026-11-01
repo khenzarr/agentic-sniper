@@ -1,6 +1,6 @@
 {
   "name": "agentic-sniper",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -15,6 +15,7 @@
     "reconcile": "node src/hunter.mjs reconcile",
     "sniper:once": "node src/sniper.mjs --once",
     "sniper:watch": "node src/sniper.mjs --loop",
+    "sniper:stop": "node src/hunter.mjs stop",
     "test": "node --test",
     "browser:install": "playwright install chromium"
   },

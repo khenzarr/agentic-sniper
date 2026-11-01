@@ -41,6 +41,8 @@ export function validatePreview(response,target,now=Date.now(),ttl=120){
       ids.add(BigInt(x.tokenId).toString());units+=BigInt(x.change);
     }
   }
-  if(type!=='Erc20'&&units!==BigInt(target.quantity||'1'))throw new Error('MINT_QUANTITY_MISMATCH');
-  return {...p,expiresAt:expiryMs(p.expiresAt,now,ttl)};
+  if(type!=='Erc20'&&(units<=0n||(target.quantityMode!=='fixed-lot'&&units!==BigInt(target.quantity||'1'))))throw new Error('MINT_QUANTITY_MISMATCH');
+  const expectedGain=incoming.reduce((sum,x)=>sum+Number(x.change),0);
+  if(!Number.isFinite(expectedGain)||expectedGain<=0)throw new Error('TOKEN_GAIN_TOO_LARGE_OR_INVALID');
+  return {...p,expectedGain,expectedMintUnits:type==='Erc20'?undefined:units.toString(),expiresAt:expiryMs(p.expiresAt,now,ttl)};
 }

@@ -15,11 +15,12 @@ export class Store {
     finally {await handle.close();}
     await fs.rename(tmp,f);
   }
-  async lock(fn) {
+  async lock(fn,kind='execute') {
+    if(!['execute','watch'].includes(kind))throw new Error('Invalid lock kind');
     await fs.mkdir(this.dir,{recursive:true,mode:0o700});
-    const f=path.join(this.dir,'execute.lock');
+    const f=path.join(this.dir,kind+'.lock');
     let h;
-    try {h=await fs.open(f,'wx',0o600);}catch(e){if(e.code==='EEXIST')throw new Error('Wallet runner already locked; inspect execute.lock before restarting');throw e;}
+    try {h=await fs.open(f,'wx',0o600);}catch(e){if(e.code==='EEXIST')throw new Error('Wallet runner already locked; inspect '+kind+'.lock before restarting');throw e;}
     try {await h.writeFile(JSON.stringify({pid:process.pid,at:new Date().toISOString()}));return await fn();}
     finally {await h.close();await fs.unlink(f);}
   }
