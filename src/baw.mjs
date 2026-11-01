@@ -32,8 +32,9 @@ export function getWalletState({requireDevMode=false,call=baw}={}) {
   }
   return {wallet:bsc.address.toLowerCase(),agentId:agent.agentId,devMode:settings?.devMode?.enabled===true};
 }
-export function previewMint({wallet,contract,inputData}) {
-  return baw(['contract-call','preview','--binanceChainId','56','--from',wallet,'--to',contract,'--value','0','--inputData',inputData]);
+export function previewMint({wallet,contract,inputData,valueWei='0'}) {
+  if(!/^[0-9]+$/.test(String(valueWei)))throw new Error('Invalid native value');
+  return baw(['contract-call','preview','--binanceChainId','56','--from',wallet,'--to',contract,'--value',String(valueWei),'--inputData',inputData]);
 }
 export function executeMint(requestId){return baw(['contract-call','execute','--requestId',requestId]);}
 export function walletHistory(){return baw(['wallet','tx-history','--binanceChainId','56','--size','100']).data;}

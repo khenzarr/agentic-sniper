@@ -104,3 +104,22 @@ test('history association requires exact order ID',async t=>{
  const f=await fixture(t);await f.store.write('history',[{id:'pending',status:'PENDING_CONFIRMATION',orderId:'ours'}]);
  f.deps.walletHistory=()=>[{orderId:'other',txHash:HASH}];await f.engine.cycle();assert.equal((await f.store.read('history',[]))[0].txHash,undefined);
 });
+test('paid plan persists exact value and quantity before wallet execution',async t=>{
+ const f=await fixture(t,'auto');
+ f.deps.preparePlan=async p=>({...p,quantity:'1',valueWei:'1000',budget:{upperEstimateWei:'100'},pricing:{usdLimit:5}});
+ f.deps.preview=target=>{
+  const r=raw(target);r.data.parsedTx.value=target.valueWei;
+  r.data.simulationResult.balanceChanges.push({contractAddress:'0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',owner:A,tokenType:'Native',change:'-1000',tokenId:null});
+  return r;
+ };
+ f.deps.recheckPlan=async()=>({upperEstimateWei:'120'});
+ await f.engine.cycle();
+ const record=(await f.store.read('history',[]))[0];
+ assert.equal(f.submits(),1);assert.equal(record.valueWei,'1000');assert.equal(record.quantity,'1');assert.equal(record.finalBudget.upperEstimateWei,'120');
+});
+test('paid price change before submission creates no reservation or spend',async t=>{
+ const f=await fixture(t,'auto');
+ f.deps.recheckPlan=async()=>{throw new Error('PAID_USD_BUDGET_CHANGED');};
+ await f.engine.cycle();
+ assert.equal(f.submits(),0);assert.deepEqual(await f.store.read('history',[]),[]);
+});

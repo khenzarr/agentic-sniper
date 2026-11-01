@@ -44,7 +44,7 @@ export class Engine {
       const radar=await this.d.scan(this.c.sourceUrl);
       this.log('RADAR_SCANNED',{rows:radar.totalTableRows,candidates:radar.candidates.length});
       const seen=await this.store.read('seen',{});
-      for(const candidate of radar.candidates){
+      for(const candidate of [...radar.candidates].sort((a,b)=>Number(b.listedFree===true)-Number(a.listedFree===true))){
         const contract=candidate.address.toLowerCase();
         if(history.some(x=>x.contract===contract))continue;
         const prev=seen[contract];
@@ -52,19 +52,20 @@ export class Engine {
         seen[contract]={at:this.now()};await this.store.write('seen',seen);
         try{
           const standard=await this.d.standard(contract);
-          if(standard!==candidate.standardOnSite)throw new Error('NFT interface mismatch');
+          if(standard!==candidate.standardOnSite)throw new Error('Token interface mismatch');
           const source=await this.d.source(contract);
           const plans=mintPlans(source.abi,wallet.wallet);
           if(!plans.length)throw new Error('NO_SUPPORTED_MINT_METHOD');
           const viable=[];
           for(const plan of plans){
-            try{const budget=await this.d.simulate(wallet.wallet,contract,plan.inputData,this.c);viable.push({...plan,budget});}catch(e){this.log('METHOD_UNAVAILABLE',{contract,method:plan.signature,reason:safeError(e)});}
+            try{if(this.d.preparePlan)viable.push(await this.d.preparePlan(plan,source,contract,wallet.wallet));
+            else{const budget=await this.d.simulate(wallet.wallet,contract,plan.inputData,this.c);viable.push({...plan,budget,quantity:'1',valueWei:'0'});}}catch(e){this.log('METHOD_UNAVAILABLE',{contract,method:plan.signature,reason:safeError(e)});}
           }
-          if(viable.length!==1)throw new Error(viable.length?'AMBIGUOUS_MINT_METHODS':'NO_SIMULATED_FREE_MINT');
-          const plan=viable[0],target={wallet:wallet.wallet,contract,inputData:plan.inputData,standard};
+          if(viable.length!==1)throw new Error(viable.length?'AMBIGUOUS_MINT_METHODS':'NO_SUPPORTED_MINT_WITHIN_BUDGET');
+          const plan=viable[0],target={wallet:wallet.wallet,contract,inputData:plan.inputData,standard,valueWei:plan.valueWei,quantity:plan.quantity};
           const raw=await this.d.preview(target);
           const preview=validatePreview(raw,target,this.now(),this.c.previewTtlSeconds);
-          const item={id:randomUUID(),at:new Date(this.now()).toISOString(),day:todayTR(new Date(this.now())),wallet:wallet.wallet,agentId:wallet.agentId,contract,standard,method:plan.signature,inputData:plan.inputData,sourceName:source.name,budget:plan.budget,requestId:preview.requestId,expiresAt:preview.expiresAt,requireAppConfirmation:preview.requireAppConfirmation,status:'PREVIEWED'};
+          const item={id:randomUUID(),at:new Date(this.now()).toISOString(),day:todayTR(new Date(this.now())),wallet:wallet.wallet,agentId:wallet.agentId,contract,standard,method:plan.signature,inputData:plan.inputData,valueWei:plan.valueWei,quantity:plan.quantity,pricing:plan.pricing,sourceName:source.name,budget:plan.budget,requestId:preview.requestId,expiresAt:preview.expiresAt,requireAppConfirmation:preview.requireAppConfirmation,status:'PREVIEWED'};
           await this.store.write('preview-'+item.id,item);
           this.log('PREVIEW_READY',{...item,simulation:{parsedTx:preview.parsedTx,balanceChanges:preview.balanceChanges}});
           if(this.c.mode==='preview')continue; // scan every eligible collection, not just the first
@@ -72,7 +73,8 @@ export class Engine {
           if(this.c.mode==='app'&&!preview.requireAppConfirmation){this.log('MANUAL_APPROVAL_REQUIRED',{id:item.id});continue;}
           const fresh=await this.d.wallet({requireDevMode:true});
           if(fresh.wallet.toLowerCase()!==wallet.wallet.toLowerCase()||fresh.agentId!==wallet.agentId)throw new Error('Wallet identity changed before submission');
-          await this.d.simulate(wallet.wallet,contract,plan.inputData,this.c);
+          if(this.d.recheckPlan)item.finalBudget=await this.d.recheckPlan(plan,contract,wallet.wallet);
+          else await this.d.simulate(wallet.wallet,contract,plan.inputData,this.c);
           if(this.now()>=preview.expiresAt)throw new Error('Preview expired before submission');
           item.status='SUBMITTING';history.push(item);
           await this.store.write('history',history); // durable reservation before touching wallet

@@ -1,5 +1,4 @@
 export const ADDRESS = /^0x[a-fA-F0-9]{40}$/;
-export const MAX_MINT_WEI = 0n;
 
 export function isAddress(value) { return typeof value === 'string' && ADDRESS.test(value); }
 export function isFreeRow(text) {
@@ -8,15 +7,15 @@ export function isFreeRow(text) {
 export function getListedStandard(text) {
   if (/\b1155\b/.test(text)) return 'ERC-1155';
   if (/\b721\b/.test(text)) return 'ERC-721';
+  if (/\b(?:ERC-?20|20)\b/i.test(text)) return 'ERC-20';
   return null;
 }
 export function candidateFromRow({ text, hrefs = [] }) {
-  if (!isFreeRow(text)) return null;
   const standard = getListedStandard(text);
   if (!standard) return null;
   const found = hrefs.map(h => (h.match(/(?:\/address\/|\/token\/|[?&]detay=)(0x[a-fA-F0-9]{40})(?:\b|$)/i) || [])[1]).find(Boolean);
   if (!found) return null;
-  return { address: found.toLowerCase(), standardOnSite: standard, title: text.slice(0, 180), source: 'agenticmint.ai', detectedAt: new Date().toISOString() };
+  return { address: found.toLowerCase(), standardOnSite: standard, listedFree:isFreeRow(text), title: text.slice(0, 180), source: 'agenticmint.ai', detectedAt: new Date().toISOString() };
 }
 export function gasBudget(estimatedGas, gasPrice, maxWei, paddingPercent = 20) {
   const gas = BigInt(estimatedGas), price = BigInt(gasPrice), ceiling = BigInt(maxWei);

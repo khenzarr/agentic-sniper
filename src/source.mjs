@@ -37,15 +37,16 @@ export function mintPlans(abi,wallet) {
   const plans=[];
   for(const f of abi){
     if(f.type!=='function'||!names.has(f.name)||!['payable','nonpayable'].includes(f.stateMutability)||!Array.isArray(f.inputs))continue;
-    const args=[];let valid=true;
+    const args=[];let valid=true,quantityIndex=-1;
     for(const a of f.inputs){
       if(a.type==='address'&&/^(to|recipient|receiver|account|_to|_recipient|_receiver)$/i.test(a.name||''))args.push(wallet);
-      else if(/^uint(256|32|64|128)?$/.test(a.type)&&/^_?(quantity|qty|amount|count|numTokens|numberOfTokens)$/i.test(a.name||''))args.push(1n);
+      else if(/^uint(256|32|64|128)?$/.test(a.type)&&/^_?(quantity|qty|amount|count|numTokens|numberOfTokens)$/i.test(a.name||'')){if(quantityIndex!==-1){valid=false;break;}quantityIndex=args.length;args.push(1n);}
       else{valid=false;break;}
     }
     if(!valid||f.inputs.length>2)continue;
     const signature=f.name+'('+f.inputs.map(a=>a.type).join(',')+')';
-    plans.push({signature,inputData:encodeFunctionData({abi:[f],functionName:f.name,args}),mutability:f.stateMutability});
+    const encode=quantity=>{const values=[...args];if(quantityIndex>=0)values[quantityIndex]=BigInt(quantity);return encodeFunctionData({abi:[f],functionName:f.name,args:values});};
+    plans.push({signature,inputData:encode(1n),mutability:f.stateMutability,quantityIndex,encode});
   }
   return plans;
 }

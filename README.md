@@ -1,6 +1,6 @@
 # Agentic Sniper
 
-A BNB Smart Chain bot that monitors [AgenticMint](https://agenticmint.ai) for supported public free NFT mints, validates candidates, and submits transactions through Binance Agentic Wallet.
+A BNB Smart Chain bot that monitors [AgenticMint](https://agenticmint.ai) for supported public token and NFT mints, validates candidates, and submits transactions through Binance Agentic Wallet. Free mints are prioritized; paid mints can use a maximum $5 estimated all-in budget per collection and wallet.
 
 It follows the current radar rather than a fixed collection. Each user connects their own Agentic Wallet and claimed Agent ID. Wallet history, daily limits, and pending transactions are isolated by wallet address.
 
@@ -8,15 +8,16 @@ It follows the current radar rather than a fixed collection. Each user connects 
 
 ## Features
 
-- Continuous discovery of ERC-721 and ERC-1155 free-mint candidates.
-- Verified source and ABI checks, on-chain NFT interface checks, zero-value simulation, and gas estimates.
-- Support for selected zero-argument and recipient/quantity mint functions, including payable methods that succeed with zero native value.
+- Continuous discovery of ERC-20, ERC-721, and ERC-1155 candidates from the full radar.
+- Verified source and ABI checks, on-chain token interface checks, transaction simulation, and gas estimates.
+- Support for selected zero-argument and recipient/quantity mint functions, including free and native-BNB paid methods.
+- Chainlink BNB/USD pricing and batch sizing within the $5 mint-plus-gas budget, with 10% price headroom.
 - Mandatory BAW previews with simulation, recipient, balance-change, approval, and risk checks.
 - Preview, Binance app approval, and automatic execution modes.
 - Per-wallet transaction reservations, duplicate prevention, receipt verification, and restart recovery.
 - No private-key import, seed phrase storage, or bundled wallet credentials.
 
-Source verification and simulation are filters, not a security audit. Free mints still cost network gas. Some collections require unsupported proofs, signatures, or custom workflows and will be skipped.
+Source verification and simulation are filters, not a security audit. Free mints still cost network gas. Custom proofs, signatures, ambiguous pricing, proxies, and payments requiring ERC-20 approvals remain unsupported. This bot does not promise to mint every contract on the radar.
 
 ## Installation
 
@@ -71,7 +72,7 @@ To switch accounts, stop the bot, run `baw auth signout`, and sign in with the o
 | --- | --- |
 | `npm run doctor` | Display the connected identity, mode, execution gate, limits, and state directory. |
 | `npm run scan` | Read the current radar without requiring a wallet. |
-| `npm run audit` | Check source/ABI, NFT interfaces, zero-value calls, and gas for the connected wallet. Does not create BAW previews. |
+| `npm run audit` | Check source/ABI, token interfaces, free or paid mint planning, and gas for the connected wallet. Does not create BAW previews. |
 | `npm run sniper:once` | Run one discovery and processing cycle. |
 | `npm run sniper:watch` | Keep monitoring at the configured interval. |
 | `npm run history` | Display this wallet's local transaction records. |
@@ -117,18 +118,30 @@ To return to preview mode, set `SNIPER_MODE=preview` and restart. Configuration 
 
 ## How candidates are processed
 
-1. Read current free ERC-721/ERC-1155 rows from the radar. Commands displayed by the website are never executed.
-2. Verify bytecode and NFT interfaces on BSC.
+1. Read ERC-20/ERC-721/ERC-1155 rows from the full radar, with free listings first. Commands displayed by the website are never executed.
+2. Verify bytecode and token interfaces on BSC.
 3. Require verified contract source and ABI from Etherscan. Upgradeable proxies are excluded.
 4. Consider `mint`, `publicMint`, `freeMint`, and `claim`.
 5. Accept supported zero-argument methods or clearly named recipient/quantity inputs. The recipient is the connected wallet and quantity is one. Token IDs, proofs, and signatures are not guessed.
-6. Simulate with **value = 0 wei**, including payable functions. Reverts from paid phases, exhausted supply, or wallet eligibility checks block submission.
+6. First simulate **value = 0 wei**. If this succeeds, select one free mint invocation. Otherwise, when paid minting is enabled, require a payable method and one unambiguous supported native unit-price getter. Plan the largest affordable quantity for that method and simulate the exact BNB payment. Remaining wallet limits, per-transaction limits and supply limits are enforced by those simulations.
 7. Require exactly one successful supported method. Multiple successful methods produce `AMBIGUOUS_MINT_METHODS`.
 8. Check the gas estimate, wallet balance, BAW simulation, and risk report. Approval changes, authority changes, and risk signals block submission.
-9. Require the BAW simulation to show exactly one incoming NFT from the target collection to the connected wallet. Outgoing assets, ERC-20 changes, other recipients, extra changes, and unknown schemas are rejected.
-10. Before submission, recheck the wallet identity, simulation, execution opt-in, and preview expiration.
+9. Require incoming tokens from the target contract to the connected wallet. NFT units must match the planned quantity. For paid mints, the only permitted debit is the exact reserved native-BNB payment from that wallet. Other outgoing tokens, approvals, recipients, and unknown changes are rejected.
+10. Before submission, recheck wallet identity, simulation, execution opt-in, preview expiration and the latest BNB/USD quote. A price change that breaks the budget blocks submission.
 
 A radar label is not proof of mint eligibility. Unsupported contracts and responses are skipped with a reason.
+
+### Paid mint budget and wallet limits
+
+`paidEnabled` enables paid planning; real submission still requires the execution mode and both execution opt-ins described above. `paidMintUsdLimit` is at most **5 USD per collection per wallet**, including native mint value and the padded gas estimate. It is not a budget per NFT, and not a valuation of the tokens being received.
+
+The [Chainlink BNB/USD feed](https://data.chain.link/feeds/bsc/mainnet/bnb-usd) on BSC is read directly. Invalid or older-than-one-hour quotes block paid minting. A fresh quote is fetched immediately before execution. `usdSafetyMarginPercent` defaults to 10: at a fixed quote, planned mint value plus padded gas must fit within approximately $4.55, leaving headroom below $5.
+
+For supported linear per-unit pricing, bounded binary-search simulations find an affordable batch without exceeding the contract's remaining wallet, transaction, or supply limits. `maxBatchQuantity` defaults to 1000 (also the supported maximum). Parameterless methods mint one invocation. Quantity uses the contract's integer units; ERC-20 decimal units are not converted into whole tokens automatically. Nonlinear pricing, proofs, signatures, and custom token IDs are not inferred. There are no repeat top-ups: a previous submitted record for a collection still prevents another attempt, including records from earlier versions.
+
+Supported price getters are zero-argument unsigned-integer `price`, `mintPrice`, `MINT_PRICE`, `mintCost`, `cost`, `publicMintPrice`, and `PRICE`. Conflicting nonzero prices are rejected. Native BNB is the only supported payment asset. ERC-20 payment approvals are never requested.
+
+The $5 check is a **pre-submission estimate**. BAW does not expose an enforceable final USD or gas-price ceiling; exchange rates and final gas can change, including while waiting for app approval. The safety margin reduces this risk but cannot guarantee an absolute final-dollar ceiling.
 
 ## Limits and transaction tracking
 
@@ -142,6 +155,8 @@ Default settings in `config.json`:
 | Gas-price padding | 20% |
 | Polling interval | 120 seconds; minimum 90 seconds |
 | Local preview lifetime | Up to 120 seconds, bounded by BAW expiration |
+| Paid collection budget | $5 including padded gas, with 10% additional price headroom |
+| Paid batch search limit | 1000 quantity units |
 
 The gas budget is a conservative **estimate**, not an enforceable ceiling on the eventual network fee through BAW.
 
@@ -150,7 +165,7 @@ Records are stored under `state/56/<wallet>/`. A per-wallet lock prevents overla
 Before execution, a submission reservation is written and synced to disk. Subsequent cycles:
 
 - Associate pending orders with transaction hashes using the exact order ID.
-- Wait for three confirmations, then validate the transaction sender, target, calldata, zero native value, and NFT mint event.
+- Wait for three confirmations, then validate sender, target, calldata, the exact reserved native value, and token/NFT mint events. NFT totals must match the planned quantity.
 - Continue to another collection after a confirmed mint.
 - Pause on uncertain submissions rather than retrying blindly.
 - Mark transactions without the expected mint event as `NEEDS_REVIEW`.
@@ -202,7 +217,7 @@ Source API errors are distinguished from missing verification:
 npm test
 ```
 
-Tests do not submit real wallet transactions. They cover wallet isolation and switching, preview validation and expiry, gas and balance checks, ambiguous methods, daily limits, uncertain submissions, duplicate prevention, NFT receipts, and continuation after confirmation.
+Tests do not submit real wallet transactions. They cover wallet isolation and switching, preview validation and expiry, gas and balance checks, ambiguous methods, daily limits, uncertain submissions, duplicate prevention, ERC-20/NFT receipts, paid quantity selection, wallet caps, oracle freshness, USD budget checks, and continuation after confirmation.
 
 GitHub Actions runs the suite on **Windows, macOS, and Linux with Node.js 22 and 24**. Passing these tests does not establish that every collection is supported or that every platform's live wallet flow has been exercised.
 

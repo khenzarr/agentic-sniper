@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import { candidateFromRow } from './policy.mjs';
 
 export async function scrapeRadar(url) {
-  if (url !== 'https://agenticmint.ai/?f=bedava') throw new Error('Radar URL not allowlisted');
+  if (!['https://agenticmint.ai/','https://agenticmint.ai/?f=bedava'].includes(url)) throw new Error('Radar URL not allowlisted');
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
