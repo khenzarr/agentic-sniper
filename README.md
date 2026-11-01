@@ -17,19 +17,25 @@ A BSC bot that monitors [AgenticMint](https://agenticmint.ai) for supported ERC-
 
 This is not a promise to mint every contract or find valuable tokens. Custom proofs, signatures, unsupported selectors, complex proxies, and ERC-20 payment approvals are not automatically handled. Source verification, selector inference, and successful simulation are not security audits.
 
-## Installation
+## Quick start: how to use
 
-Install Node.js 22.16+ and the official [Binance Agentic Wallet CLI](https://www.npmjs.com/package/@binance/agentic-wallet). Confirm that `baw --version` works.
+### 1. Install the requirements
+
+Install [Node.js 22.16 or newer](https://nodejs.org/) and [Git](https://git-scm.com/downloads). You also need your own Binance Agentic Wallet with a claimed Agent ID and a small BSC BNB balance for gas. Free mints still cost gas.
+
+Open **PowerShell on Windows** or **Terminal on macOS/Linux**, then run these commands one at a time:
 
 ```sh
+npm install -g @binance/agentic-wallet
 git clone https://github.com/khenzarr/agentic-sniper.git
 cd agentic-sniper
 npm ci
 npm run browser:install
-npm test
 ```
 
-Create your environment file:
+### 2. Create your settings file
+
+Run the command for your operating system:
 
 ```powershell
 # Windows PowerShell
@@ -41,17 +47,81 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Do not overwrite an existing .env during updates. Set ETHERSCAN_API_KEY for the primary source API. Exact-match Sourcify fallback requires no key. BSC_RPC_URL optionally overrides the default BSC endpoint. Never commit credentials or pairing data.
+Open `.env` in a text editor. If you have an Etherscan API key, enter it after `ETHERSCAN_API_KEY=`. Without one, the bot can use the keyless Sourcify fallback, but source coverage may be lower. Leave `BSC_RPC_URL` unchanged unless you have your own BSC RPC endpoint.
 
-## Wallet login
+Never enter a wallet private key or seed phrase into this project. Do not share `.env` or wallet pairing data. When updating an existing installation, keep your existing `.env`.
+
+### 3. Connect your own wallet
 
 ```sh
 npm run login
-npm run login -- --qr QR_CODE_ID
-npm run doctor
 ```
 
-Open the sign-in link locally and complete Binance authentication. The QR verification command is needed only if the login flow asks for it. Each user connects their own claimed Agent ID; there is no fixed username. BAW manages OS-local credentials.
+Follow the displayed Binance sign-in instructions. If the flow specifically asks you to verify a QR code, run `npm run login -- --qr QR_CODE_ID`, replacing `QR_CODE_ID` with the ID shown by the login flow.
+
+Each user connects their own wallet and Agent ID automatically; you do not need to replace a hard-coded username. BAW stores credentials locally. For execution, enable Developer Mode and unlock transactions in your Agentic Wallet using Binance's own controls.
+
+### 4. Choose preview or automatic minting
+
+**The default setup only previews. It does not mint automatically.** To try it without submitting transactions, leave the execution settings unchanged and continue to step 5.
+
+To enable automatic **free mints only**, edit the existing lines in `.env` to:
+
+```ini
+SNIPER_MODE=auto
+ENABLE_EXECUTE=YES_I_UNDERSTAND
+```
+
+Then open `config.json` and change these existing values (keep the rest of the file):
+
+```json
+"executionEnabled": true,
+"paidEnabled": false,
+"degenMode": false
+```
+
+Save both files. This enables real transactions and gas spending. Binance app confirmation may still be required by BAW.
+
+Optional settings in `config.json`:
+
+| If you want to… | Change |
+| --- | --- |
+| Include supported paid mints | Set `paidEnabled` to `true`. The default budget is $5 per wallet and collection, including cumulative mint payments and estimated gas—not $5 per day. Final fees and exchange rates can vary. |
+| Try supported mints without verified source code | Set `degenMode` to `true` only if you accept the additional contract risk. |
+| Change the daily submission cap | Edit `dailyLimit`; the default is 5. `null` removes this count cap and can spend gas across many collections. |
+
+Max-mint search is already enabled. It searches within the configured limits; unsupported contracts are skipped.
+
+### 5. Check and start
+
+```sh
+npm run doctor
+npm run sniper:watch
+```
+
+Check that `doctor` shows **your wallet**, **your Agent ID**, and the mode you selected before starting the watcher. If it reports a problem, resolve it first.
+
+Keep the terminal open and your computer awake. The bot checks the radar every 120 seconds by default. In `auto` mode it can submit eligible mints that pass its checks; in `preview` mode it only prepares previews.
+
+| Log event | Meaning |
+| --- | --- |
+| `RADAR_SCANNED` | The listings were checked. |
+| `PREVIEW_READY` | A transaction preview is ready; this alone does not mean a mint was submitted. |
+| `SUBMITTED` | A transaction was sent. |
+| `RECEIPT_CHECKED` with `CONFIRMED` | The transaction and expected mint receipt were verified. |
+| `CANDIDATE_SKIPPED` | A listing did not pass the current checks or limits. |
+
+### 6. Stop or restart
+
+Press **Ctrl+C** to stop. After changing settings, stop the watcher and run `npm run sniper:watch` again. Do not run a second watcher alongside the first. Submitted transactions can still complete after stopping.
+
+To see your results:
+
+```sh
+npm run history
+```
+
+## Switching wallets
 
 Stop the bot before switching accounts. Use `baw auth signout` followed by a new login. Separate users should use separate installations or OS accounts; this is not a shared-server wallet service.
 
