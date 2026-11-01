@@ -1,0 +1,11 @@
+{
+  "chainId": 56,
+  "sourceUrl": "https://agenticmint.ai/?f=bedava",
+  "dailyLimit": 5,
+  "maxGasWei": "100000000000000",
+  "gasPaddingPercent": 20,
+  "previewTtlSeconds": 120,
+  "intervalSeconds": 120,
+  "mode": "preview",
+  "executionEnabled": false
+}

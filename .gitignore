@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+state/*
+!state/.gitkeep
+profiles/*.json
+!profiles/example.json
+playwright-report/
+test-results/
+*.log
+*.tmp
+*.bak
+.DS_Store

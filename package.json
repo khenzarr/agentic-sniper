@@ -1,0 +1,25 @@
+{
+  "name": "agentic-sniper",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16"
+  },
+  "scripts": {
+    "login": "node src/hunter.mjs login",
+    "doctor": "node src/hunter.mjs doctor",
+    "scan": "node src/hunter.mjs scan",
+    "audit": "node src/hunter.mjs audit",
+    "history": "node src/hunter.mjs history",
+    "reconcile": "node src/hunter.mjs reconcile",
+    "sniper:once": "node src/sniper.mjs --once",
+    "sniper:watch": "node src/sniper.mjs --loop",
+    "test": "node --test",
+    "browser:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "playwright": "1.56.0",
+    "viem": "^2.0.0"
+  }
+}
