@@ -8,6 +8,7 @@ import {Store} from '../src/store.mjs';
 import {mintPlans,classifySource,sourceInfo} from '../src/source.mjs';
 import {expiryMs,validatePreview} from '../src/preview.mjs';
 import {getWalletState} from '../src/baw.mjs';
+import {quarantineUnknown} from '../src/recovery.mjs';
 const A='0x1234567890123456789012345678901234567890';
 const B='0x2234567890123456789012345678901234567890';
 const C='0x3234567890123456789012345678901234567890';
@@ -79,6 +80,26 @@ test('ambiguous timeout persists across restart and blocks retry',async t=>{
  await f.engine.cycle();assert.equal((await f.store.read('history',[]))[0].status,'UNKNOWN_SUBMISSION');
  f.deps.execute=()=>{throw new Error('must never reach');};await f.engine.cycle();
  assert.ok(f.events.some(x=>x.event==='PAUSED_UNRESOLVED_TX'));
+});
+
+test('explicit quarantine skips only its collection and allows unrelated mints across restarts',async t=>{
+ const f=await fixture(t,'auto');f.c.maxMint=true;f.c.dailyLimit=null;
+ const unknown={id:'unknown',wallet:A,contract:B,requestId:'old',expiresAt:now-1,status:'UNKNOWN_SUBMISSION',day:'2026-11-01',valueWei:'100',budget:{upperEstimateWei:'10'}};
+ const q=quarantineUnknown(unknown,{wallet:A,accepted:true,pendingTransactions:[],latestNonce:1,pendingNonce:1,now});
+ await f.store.write('history',[q]);await f.engine.cycle();
+ let h=await f.store.read('history',[]);assert.equal(h[0].status,'UNKNOWN_SUBMISSION');assert.equal(h[1].contract,C);assert.equal(f.submits(),1);
+ f.deps.receipt=()=>({confirmed:true,actualGasWei:'10'});f.deps.preparePlan=async p=>({...p,quantity:'1',valueWei:'0',budget:{upperEstimateWei:'10'}});
+ const restarted=new Engine(f.c,f.store,f.deps);await restarted.cycle();
+ h=await f.store.read('history',[]);assert.equal(h.filter(x=>x.contract===B).length,1);assert.equal(f.submits(),2);
+});
+
+test('quarantined collection stays blocked after a later receipt and other uncertainty still pauses',async t=>{
+ const f=await fixture(t,'auto');f.c.maxMint=true;
+ const q=quarantineUnknown({id:'unknown',wallet:A,contract:B,requestId:'old',expiresAt:now-1,status:'UNKNOWN_SUBMISSION'}, {wallet:A,accepted:true,pendingTransactions:[],latestNonce:1,pendingNonce:1,now});
+ q.txHash=HASH;f.deps.receipt=()=>({confirmed:true});await f.store.write('history',[q]);await f.engine.cycle();
+ const h=await f.store.read('history',[]);assert.equal(h[0].status,'CONFIRMED');assert.equal(h[1].contract,C);assert.equal(f.submits(),1);
+ const g=await fixture(t,'auto');await g.store.write('history',[q,{id:'other',wallet:A,contract:C,status:'UNKNOWN_SUBMISSION'}]);await g.engine.cycle();assert.equal(g.submits(),0);assert.ok(g.events.some(x=>x.event==='PAUSED_UNRESOLVED_TX'));
+ const k=await fixture(t,'auto');await k.store.write('history',[{...q,status:'NEEDS_REVIEW',txHash:HASH}]);k.deps.receipt=()=>({confirmed:false,failed:false});await k.engine.cycle();assert.equal(k.submits(),0);assert.ok(k.events.some(x=>x.event==='PAUSED_UNRESOLVED_TX'));
 });
 test('confirmed receipt unblocks next collection without reminting first',async t=>{
  const f=await fixture(t,'auto');await f.engine.cycle();

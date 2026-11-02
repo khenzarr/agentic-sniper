@@ -3,6 +3,7 @@ import {todayTR,committedToday} from './policy.mjs';
 import {mintPlans} from './source.mjs';
 import {validatePreview} from './preview.mjs';
 import {collectionSpentWei} from './planner.mjs';
+import {isQuarantined} from './recovery.mjs';
 const unresolved=new Set(['SUBMITTING','PENDING_CONFIRMATION','BROADCASTED','UNKNOWN_SUBMISSION','NEEDS_REVIEW']);
 export function safeError(e) {
   let s=String(e?.message||e).split('\n')[0];
@@ -42,7 +43,7 @@ export class Engine {
       if(wallet.wallet.toLowerCase()!==this.d.expectedWallet.toLowerCase())throw new Error('Wallet changed; stop and restart for new account');
       const history=await this.store.read('history',[]);
       await this.reconcile(history);
-      if(history.some(x=>unresolved.has(x.status))){this.log('PAUSED_UNRESOLVED_TX');return {pending:true};}
+      if(history.some(x=>unresolved.has(x.status)&&!(x.status==='UNKNOWN_SUBMISSION'&&isQuarantined(x)))){this.log('PAUSED_UNRESOLVED_TX');return {pending:true};}
       if(this.c.dailyLimit!==null&&committedToday(history,new Date(this.now()))>=this.c.dailyLimit){this.log('DAILY_LIMIT_REACHED');return;}
       const radar=await this.d.scan(this.c.sourceUrl);
       this.log('RADAR_SCANNED',{rows:radar.totalTableRows,candidates:radar.candidates.length});
@@ -52,6 +53,7 @@ export class Engine {
         if(this.d.shouldStop?.())return;
         const contract=candidate.address.toLowerCase();
         const previous=history.filter(x=>x.contract===contract);
+        if(previous.some(isQuarantined))continue; // Never retry this collection, even if its old receipt later confirms.
         if(previous.length&&(!this.c.maxMint||previous.some(r=>r.status!=='CONFIRMED')||previous.length>=(this.c.maxMintCallsPerCollection||100)))continue;
         const prev=seen[contract];
         if(prev&&this.now()-prev.at<this.c.intervalSeconds*1000)continue;

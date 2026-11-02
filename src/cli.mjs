@@ -12,9 +12,10 @@ import {bnbUsd,nativeUnitPrice} from './pricing.mjs';
 import {choosePlan,recheckPlan,collectionSpentWei} from './planner.mjs';
 import {resolveMintSource,quantityCeiling} from './degen.mjs';
 import {keccak256} from 'viem';
+import {quarantineUnknown} from './recovery.mjs';
 export async function main(args=process.argv.slice(2)){
   const c=await loadConfig(),command=args[0]||'help';
-  if(command==='help'){console.log('Commands: login [--qr ID] | doctor | scan | audit | once | watch | stop [--wallet ADDRESS] | history | reconcile | attach --id ID --tx HASH');return;}
+  if(command==='help'){console.log('Commands: login [--qr ID] | doctor | scan | audit | once | watch | stop [--wallet ADDRESS] | history | reconcile | attach --id ID --tx HASH | quarantine --id ID --accept-unknown-outcome');return;}
   if(command==='login'){
     // The CLI owns its OS-local credentials. Login data is shown only in this terminal.
     const i=args.indexOf('--qr');
@@ -64,6 +65,24 @@ export async function main(args=process.argv.slice(2)){
     }
   };
   const engine=new Engine(c,store,deps);
+  if(command==='quarantine'){
+    const index=args.indexOf('--id'),id=index>=0?args[index+1]:null;
+    if(!id||!args.includes('--accept-unknown-outcome'))throw new Error('quarantine requires --id ID --accept-unknown-outcome; the outcome stays unknown and this collection stays blocked');
+    // Holding both leases prevents a running or newly started watcher from racing this manual recovery.
+    await store.lock(()=>store.lock(async()=>{
+      const history=await store.read('history',[]);
+      await engine.reconcile(history);
+      const position=history.findIndex(r=>r.id===id),record=history[position];
+      const pending=baw(['wallet','tx-history','--binanceChainId','56','--type','pending','--size','100']).data;
+      if(pending?.hasMore!==false)throw new Error('Wallet pending history is incomplete');
+      const [latestNonce,pendingNonce]=await Promise.all([client.getTransactionCount({address:wallet.wallet,blockTag:'latest'}),client.getTransactionCount({address:wallet.wallet,blockTag:'pending'})]);
+      const updated=quarantineUnknown(record,{wallet:wallet.wallet,accepted:true,pendingTransactions:pending.transactions,latestNonce,pendingNonce});
+      const backup='history-backup-quarantine-'+randomUUID();
+      await store.write(backup,history);
+      history[position]=updated;await store.write('history',history);
+      console.log(JSON.stringify({event:'COLLECTION_QUARANTINED',id,contract:record.contract,status:updated.status,backup,warning:'Outcome remains unknown; do not retry this collection'}));
+    }),'watch');return;
+  }
   if(command==='audit'){
     const radar=await scrapeRadar(c.sourceUrl);
     for(const x of radar.candidates){

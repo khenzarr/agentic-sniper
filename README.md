@@ -231,6 +231,21 @@ node src/hunter.mjs attach --id RECORD_ID --tx 0xTRANSACTION_HASH
 
 A manually attached hash must match the reserved on-chain transaction. Do not delete records to retry unknown outcomes. A review-required transaction pauses automatic submissions. If a crash leaves execute.lock or watch.lock behind, verify the recorded process is no longer running before removing the stale lock.
 
+### Manual recovery when BAW returns no hash or order ID
+
+Unknown submissions pause the wallet by default. Check BAW transaction history and the chain first. If a matching transaction exists, attach its verified hash using the command above.
+
+Only after explicitly accepting that an old submission's outcome remains unknown, you can quarantine its collection and resume unrelated mints:
+
+```sh
+npm run sniper:stop
+# Wait until the watcher exits, then use the exact local record ID:
+node src/hunter.mjs quarantine --id RECORD_ID --accept-unknown-outcome
+npm run sniper:watch
+```
+
+This requires an expired preview, no hash or order ID, empty BAW pending history, equal latest/pending RPC nonces, and an idle watcher. These checks do **not** prove the old request was cancelled. The command backs up history, keeps `UNKNOWN_SUBMISSION` and its reserved spend, and permanently blocks that collection in this installation. It never resubmits the old request. Other unresolved records still pause the wallet. A later verified receipt can update the outcome without removing the collection block. Recovery never happens automatically.
+
 Legacy records in root state/history.json are preserved but not imported automatically. Check them before upgrading. Limits are local to an installation; independent installations do not share a global wallet budget.
 
 ## Source provider reliability
