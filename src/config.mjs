@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {applyMintScope} from './run-options.mjs';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-export async function loadConfig() {
-  try { process.loadEnvFile(path.join(ROOT,'.env')); } catch(e) { if(e.code!=='ENOENT') throw e; }
-  const raw=JSON.parse(await fs.readFile(path.join(ROOT,'config.json'),'utf8'));
+export async function loadConfig({mintScope,root=ROOT}={}) {
+  try { process.loadEnvFile(path.join(root,'.env')); } catch(e) { if(e.code!=='ENOENT') throw e; }
+  const raw=JSON.parse(await fs.readFile(path.join(root,'config.json'),'utf8'));
   const c={chainId:56,sourceUrl:'https://agenticmint.ai/',dailyLimit:5,maxGasWei:'100000000000000',gasPaddingPercent:20,previewTtlSeconds:120,intervalSeconds:120,mode:'preview',paidEnabled:false,paidMintUsdLimit:5,usdSafetyMarginPercent:10,maxBatchQuantity:1000,...raw};
   c.mode=process.env.SNIPER_MODE || c.mode;
   c.maxMint=raw.maxMint??false;c.degenMode=raw.degenMode??false;c.maxMintCallsPerCollection=raw.maxMintCallsPerCollection??100;
@@ -23,5 +24,5 @@ export async function loadConfig() {
   if(!Number.isInteger(c.previewTtlSeconds)||c.previewTtlSeconds<10||c.previewTtlSeconds>120) throw new Error('Preview TTL must be 10..120 seconds');
   if(!Number.isInteger(c.intervalSeconds)||c.intervalSeconds<90||c.intervalSeconds>3600) throw new Error('Polling interval must be 90..3600 seconds');
   if(c.mode!=='preview'&&(c.executionEnabled!==true||process.env.ENABLE_EXECUTE!=='YES_I_UNDERSTAND')) throw new Error('Execution needs config.executionEnabled=true and ENABLE_EXECUTE=YES_I_UNDERSTAND');
-  return c;
+  return applyMintScope(c,mintScope);
 }

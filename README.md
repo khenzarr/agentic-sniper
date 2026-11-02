@@ -76,7 +76,6 @@ Then open `config.json` and change these existing values (keep the rest of the f
 
 ```json
 "executionEnabled": true,
-"paidEnabled": false,
 "degenMode": false
 ```
 
@@ -86,7 +85,7 @@ Optional settings in `config.json`:
 
 | If you want to… | Change |
 | --- | --- |
-| Include supported paid mints | Set `paidEnabled` to `true`. The default budget is $5 per wallet and collection, including cumulative mint payments and estimated gas—not $5 per day. Final fees and exchange rates can vary. |
+| Include supported paid mints | Start with `npm run sniper:all` instead of `npm run sniper:free`. The default budget is $5 per wallet and collection, including cumulative mint payments and estimated gas—not $5 per day. Final fees and exchange rates can vary. |
 | Try supported mints without verified source code | Set `degenMode` to `true` only if you accept the additional contract risk. |
 | Change the daily submission cap | Edit `dailyLimit`; the default is 5. `null` removes this count cap and can spend gas across many collections. |
 
@@ -95,11 +94,11 @@ Max-mint search is already enabled. It searches within the configured limits; un
 ### 5. Check and start
 
 ```sh
-npm run doctor
-npm run sniper:watch
+npm run sniper:free -- --check
+npm run sniper:free
 ```
 
-Check that `doctor` shows **your wallet**, **your Agent ID**, and the mode you selected before starting the watcher. If it reports a problem, resolve it first.
+The `--check` command only inspects settings and identity. Check that it shows **your wallet**, **your Agent ID**, `mintScope: free`, `paidEnabled: false` and `maxMint: true` before starting the watcher. If it reports a problem, resolve it first.
 
 Keep the terminal open and your computer awake. The bot checks the radar every 120 seconds by default. In `auto` mode it can submit eligible mints that pass its checks; in `preview` mode it only prepares previews.
 
@@ -113,7 +112,7 @@ Keep the terminal open and your computer awake. The bot checks the radar every 1
 
 ### 6. Stop or restart
 
-Press **Ctrl+C** to stop. After changing settings, stop the watcher and run `npm run sniper:watch` again. Do not run a second watcher alongside the first. Submitted transactions can still complete after stopping.
+Press **Ctrl+C** to stop. After changing settings, stop the watcher and run your chosen command again. Do not run a second watcher alongside the first. Submitted transactions can still complete after stopping.
 
 To see your results:
 
@@ -134,11 +133,36 @@ Stop the bot before switching accounts. Use `baw auth signout` followed by a new
 | npm run audit | Read-only source/selector checks and quantity/price simulations; no BAW execute. |
 | npm run sniper:once | Process one cycle. |
 | npm run sniper:watch | Continuously scan and reconcile transactions. |
+| npm run sniper:free | Only zero-price mints and currently free phases; max-mint search enabled. Gas still costs BNB. |
+| npm run sniper:all | Free and supported paid mints with max-mint search and the existing collection budget (default $5 including estimated gas). |
 | npm run sniper:stop | Request a graceful stop for this wallet's watcher. |
 | npm run history | Show the connected wallet's records. |
 | npm run reconcile | Recheck pending transactions without discovering new mints. |
 
 The normal watcher runs in the foreground. Keep the terminal open and computer awake; Ctrl+C stops it. A separately launched background watcher can be stopped with npm run sniper:stop; if the wallet session has expired, use node src/hunter.mjs stop --wallet YOUR_PUBLIC_ADDRESS. Stop requests are checked locally and prevent starting another wallet execution. An already submitted transaction still needs reconciliation. No scheduled task is installed. A lifetime watch lock prevents a second watcher for the same local wallet.
+
+### Switch between free-only and all mints
+
+```sh
+# Free mints only, maximum eligible quantity:
+npm run sniper:free
+
+# Alternatively: free + supported paid mints, maximum eligible quantity:
+npm run sniper:all
+```
+
+Run **one** of these commands at a time. Stop the existing watcher and wait for it to exit before switching. Both selectors apply only to that process: they do not rewrite `config.json` or `.env`. `sniper:watch` continues to use the saved settings. Both selectors keep the existing execution opt-in, preview/app/auto mode, degen setting, limits, history, quarantines and unresolved-transaction guards.
+
+`sniper:free` only considers zero native mint payments that pass simulation; paid phases are skipped even if a listing advertises a separate free phase. Gas still costs BNB. It cannot override a contract's proof, eligibility or wallet limits. The shared collection budget still includes gas and any earlier paid mints.
+
+Check either selector without starting a watcher or submitting a transaction:
+
+```sh
+npm run sniper:free -- --check
+npm run sniper:all -- --check
+```
+
+Verify `mintScope`, `paidEnabled` and `maxMint` in the output. These commands select which mints are eligible; they do not enable execution or bypass an unresolved submission.
 
 ## Execution modes
 

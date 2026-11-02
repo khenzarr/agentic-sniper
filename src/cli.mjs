@@ -13,8 +13,8 @@ import {choosePlan,recheckPlan,collectionSpentWei} from './planner.mjs';
 import {resolveMintSource,quantityCeiling} from './degen.mjs';
 import {keccak256} from 'viem';
 import {quarantineUnknown} from './recovery.mjs';
-export async function main(args=process.argv.slice(2)){
-  const c=await loadConfig(),command=args[0]||'help';
+export async function main(args=process.argv.slice(2),{mintScope}={}){
+  const c=await loadConfig({mintScope}),command=args[0]||'help';
   if(command==='help'){console.log('Commands: login [--qr ID] | doctor | scan | audit | once | watch | stop [--wallet ADDRESS] | history | reconcile | attach --id ID --tx HASH | quarantine --id ID --accept-unknown-outcome');return;}
   if(command==='login'){
     // The CLI owns its OS-local credentials. Login data is shown only in this terminal.
@@ -36,7 +36,7 @@ export async function main(args=process.argv.slice(2)){
   const wallet=getWalletState(),client=newClient(),store=new Store(ROOT,wallet.wallet);
   if(await client.getChainId()!==56)throw new Error('RPC is not BSC');
   if(command==='doctor'){
-    console.log(JSON.stringify({...wallet,chainId:56,mode:c.mode,executionEnabled:c.executionEnabled===true&&process.env.ENABLE_EXECUTE==='YES_I_UNDERSTAND'&&c.mode!=='preview',dailyLimit:c.dailyLimit,maxMint:c.maxMint,degenMode:c.degenMode,maxMintCallsPerCollection:c.maxMintCallsPerCollection,maxGasWei:c.maxGasWei,paidEnabled:c.paidEnabled,paidMintUsdLimit:c.paidMintUsdLimit,usdSafetyMarginPercent:c.usdSafetyMarginPercent,maxBatchQuantity:c.maxBatchQuantity,sourceApiConfigured:Boolean(process.env.ETHERSCAN_API_KEY),stateDirectory:store.dir},null,2));return;
+    console.log(JSON.stringify({...wallet,chainId:56,mode:c.mode,mintScope:c.mintScope,executionEnabled:c.executionEnabled===true&&process.env.ENABLE_EXECUTE==='YES_I_UNDERSTAND'&&c.mode!=='preview',dailyLimit:c.dailyLimit,maxMint:c.maxMint,degenMode:c.degenMode,maxMintCallsPerCollection:c.maxMintCallsPerCollection,maxGasWei:c.maxGasWei,paidEnabled:c.paidEnabled,paidMintUsdLimit:c.paidMintUsdLimit,usdSafetyMarginPercent:c.usdSafetyMarginPercent,maxBatchQuantity:c.maxBatchQuantity,sourceApiConfigured:Boolean(process.env.ETHERSCAN_API_KEY),stateDirectory:store.dir},null,2));return;
   }
   if(command==='history'){console.log(JSON.stringify(await store.read('history',[]),null,2));return;}
   const deps={
@@ -117,7 +117,7 @@ export async function main(args=process.argv.slice(2)){
     controls.unref();
     process.once('SIGINT',halt);process.once('SIGTERM',halt);
     const version=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8')).version;
-    console.log(JSON.stringify({event:'STARTED',version,...wallet,mode:c.mode,maxMint:c.maxMint,degenMode:c.degenMode,dailyLimit:c.dailyLimit,intervalSeconds:c.intervalSeconds}));
+    console.log(JSON.stringify({event:'STARTED',version,...wallet,mode:c.mode,mintScope:c.mintScope,paidEnabled:c.paidEnabled,maxMint:c.maxMint,degenMode:c.degenMode,dailyLimit:c.dailyLimit,intervalSeconds:c.intervalSeconds}));
     try{while(!stop){let result;try{result=await engine.cycle();}catch(e){console.error(safeError(e));}if(!stop)await sleep((result?.pending?c.pendingPollSeconds:c.intervalSeconds)*1000,undefined,{signal:controller.signal}).catch(()=>{});}}
     finally{clearInterval(controls);await store.write('watch-session',{...session,status:'stopped',stoppedAt:new Date().toISOString()});process.removeListener('SIGINT',halt);process.removeListener('SIGTERM',halt);}
     return;

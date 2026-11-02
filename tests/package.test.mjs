@@ -9,3 +9,8 @@ test('tests are portable and old execution entry is removed',()=>{
   assert.equal(pkg.scripts.test,'node --test');
   assert.equal(pkg.scripts.execute,undefined);
 });
+
+test('free and all commands select process-local scopes without shell-specific environment syntax',()=>{
+  assert.equal(pkg.scripts['sniper:free'],'node src/sniper.mjs --loop --mint-scope free');
+  assert.equal(pkg.scripts['sniper:all'],'node src/sniper.mjs --loop --mint-scope all');
+});
